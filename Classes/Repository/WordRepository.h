@@ -31,6 +31,8 @@ public:
 
     void LoadWordInfos();
 
+    
+
 private:
     std::vector<std::shared_ptr<WordInfo>> word_infos_;
 };

@@ -1,5 +1,8 @@
 #include "EnWordScene.h"
+#include "Repository/WordRepository.h"
 #include "SimpleAudioEngine.h"
+
+using namespace CocosDenshion;
 
 USING_NS_CC;
 
@@ -22,6 +25,8 @@ bool EnWordScene::init() {
 
     auto visibleSize = Director::getInstance()->getVisibleSize();
     Vec2 origin = Director::getInstance()->getVisibleOrigin();
+    center_ = Vec2(visibleSize.width / 2 + origin.x, visibleSize.height / 2 + origin.y);
+
     auto closeItem = MenuItemImage::create(
                                            "CloseNormal.png",
                                            "CloseSelected.png",
@@ -37,30 +42,110 @@ bool EnWordScene::init() {
         closeItem->setPosition(Vec2(x,y));
     }
 
-    auto label = Label::createWithTTF("Hello World", "fonts/Marker Felt.ttf", 24);
-    if (label == nullptr) {
-        problemLoading("'fonts/Marker Felt.ttf'");
-    } else {
-        label->setPosition(Vec2(origin.x + visibleSize.width/2,
-                                origin.y + visibleSize.height - label->getContentSize().height));
-        this->addChild(label, 1);
-    }
+    action_controller_ = Node::create();
+    this->addChild(action_controller_);
 
-    auto sprite = Sprite::create("HelloWorld.png");
-    if (sprite == nullptr) {
-        problemLoading("'HelloWorld.png'");
-    } else {
-        sprite->setPosition(Vec2(visibleSize.width/2 + origin.x, visibleSize.height/2 + origin.y));
+    // 단어 가져오기 요청
+    LoadWordInfos();
 
-        // add the sprite as a child to this layer
-        this->addChild(sprite, 0);
-    }
+    // 버튼
+    submit_button_ = ui::Button::create("Gui/StartNormalButton.png", "Gui/StartClickButton.png", "Gui/StartLockButton2.png");
+    submit_button_->setTitleText("정답제출");
+    submit_button_->setTitleFontSize(32);
+    submit_button_->setScale(1.5f);
+    submit_button_->getTitleRenderer()->setPositionY(50.0f);
+    submit_button_->getTitleRenderer()->setAdditionalKerning(4.0f);
+    // TODO(pp2): 글자색 체크
+    //submit_button_->getTitleRenderer()->enableShadow(Color4B::GRAY, Size(1, -1), 0);
+    //submit_button_->getTitleRenderer()->enableOutline(Color4B::GRAY, 0);
+    submit_button_->setPosition(Vec2(center_.x, center_.y - 200.0f));
 
+    submit_button_->addTouchEventListener([&](Ref* sender, cocos2d::ui::Widget::TouchEventType type) {
+        if (type == ui::Widget::TouchEventType::BEGAN) {
+            auto audio = SimpleAudioEngine::getInstance();
+            audio->playEffect("Sound/ButtonClick.mp3");
+        }
+        else if (type == ui::Widget::TouchEventType::ENDED) {
+            CCLOG("SUBMIT CLICKED END\n");
+            /*
+            auto answer = input_field_->getString();
+            if (answer == "") {
+                static_cast<TextFieldTTF*>(input_field_->getVirtualRenderer())->attachWithIME();
+                return;
+            }
 
+            submit_button_->setEnabled(false);
+            */
+        }
+    });
+
+    this->addChild(submit_button_, 2);
+
+    auto tutorial_label = Label::createWithTTF("Just Typing Words", "fonts/BMDOHYEON.ttf", 40);
+    tutorial_label->setPosition(Vec2(center_.x,
+                                     center_.y + 400.0f));
+    this->addChild(tutorial_label, 1);
+    
+    auto callback = CallFunc::create([&] {
+        start_down_words_ = true;
+    });
+
+    auto seq = Sequence::create(
+        DelayTime::create(3.0f),
+        callback,
+        RemoveSelf::create(),
+        nullptr);
+    tutorial_label->runAction(seq);
+
+    this->scheduleUpdate();
 
     return true;
 }
 
+void EnWordScene::update(float dt) {
+    if (!start_down_words_) return;
+
+    if (!complete_preparing_words_) {
+        // 로딩 화면 보여주기
+        return;
+    }
+
+    std::call_once(flag_, [&] { 
+        StartWords();
+    });
+    
+    for (auto i = 0; i < words_.size(); ++i) {
+        const auto y = words_[i]->getPosition().y - (20.0f * dt);
+        words_[i]->setPosition(words_[i]->getPosition().x, y);
+    }
+
+}
+
+void EnWordScene::StartWords() {
+    for (auto i = 0; i < word_infos_.size(); ++i) {
+        auto callback = CallFunc::create([&, index = i] {
+            words_.push_back(Label::createWithTTF(word_infos_[index]->word, "fonts/BMDOHYEON.ttf", 30));
+            words_[index]->setPosition(center_);
+            this->addChild(words_[index]);
+        });
+
+        auto seq = Sequence::create(
+            DelayTime::create(static_cast<float>(i * 3)),
+            callback,
+            nullptr);
+        action_controller_->runAction(seq);
+    }
+}
+
+void EnWordScene::LoadWordInfos() {
+    auto word0 = std::make_shared<WordInfo>();
+    word0->word = "sediment";
+    word_infos_.emplace_back(word0);
+
+    auto word1 = std::make_shared<WordInfo>();
+    word1->word = "prepare";
+    word_infos_.emplace_back(word1);
+}
 
 void EnWordScene::menuCloseCallback(Ref* pSender)
 {
